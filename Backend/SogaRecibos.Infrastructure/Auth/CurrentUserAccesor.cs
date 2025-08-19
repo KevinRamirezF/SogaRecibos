@@ -1,6 +1,8 @@
-﻿using System.Security.Claims;
+﻿using Microsoft.AspNetCore.Http;
+using SogaRecibos.Application.Abstractions.Auth;
+using System.Security.Claims;
 
-namespace SogaRecibos.API.Auth
+namespace SogaRecibos.Infrastructure.Auth
 {
     public sealed class CurrentUserAccessor : ICurrentUserAccessor
     {
