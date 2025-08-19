@@ -1,0 +1,212 @@
+@startuml Specification Pattern - SogaRecibos Implementation
+
+!theme plain
+skinparam classAttributeIconSize 0
+skinparam classFontSize 11
+
+title Specification Pattern en SogaRecibos\nConsultas Reutilizables y Reglas de Negocio Encapsuladas
+
+' === ENTIDADES DEL DOMINIO ===
+package "Domain Entities" {
+    class Receipt {
+        +Guid Id
+        +Guid OwnerUserId
+        +ServiceProvider Service
+        +ReceiptIdentifier Identifier
+        +string? Alias
+        +DateTime CreatedAt
+    }
+
+    class User {
+        +Guid Id
+        +string ExternalId
+        +string Email
+        +DateTime CreatedAt
+    }
+
+    class ReceiptIdentifier <<record>> {
+        +string Value
+    }
+
+    enum ServiceProvider {
+        Ebsa = 1
+        Vanti = 2
+        Coservicios = 3
+    }
+}
+
+' === ESPECIFICACIONES BASE ===
+package "Ardalis.Specification" {
+    abstract class Specification<T> {
+        #Query : ISpecificationBuilder<T>
+        +Where(Expression<Func<T, bool>> criteria) : ISpecificationBuilder<T>
+        +OrderBy(Expression<Func<T, object>> orderExpression) : IOrderedSpecificationBuilder<T>
+        +OrderByDescending(Expression<Func<T, object>> orderExpression) : IOrderedSpecificationBuilder<T>
+    }
+
+    interface ISingleResultSpecification {
+    }
+}
+
+' === ESPECIFICACIONES DE RECIBOS ===
+package "Receipt Specifications" {
+    class ReceiptByOwnerSpec {
+        +ReceiptByOwnerSpec(Guid ownerId)
+    }
+
+    class ReceiptByOwnerServiceAndIdentifierSpec {
+        +ReceiptByOwnerServiceAndIdentifierSpec(Guid userId, ServiceProvider service, string identifier)
+    }
+}
+
+' === ESPECIFICACIONES DE USUARIOS ===
+package "User Specifications" {
+    class UserByExternalIdSpec {
+        +UserByExternalIdSpec(string externalId)
+    }
+}
+
+' === REPOSITORIO QUE USA ESPECIFICACIONES ===
+package "Repository Layer" {
+    interface IRepository<T> {
+        +GetByIdAsync(Guid id, CancellationToken ct) : Task<T?>
+        +AddAsync(T entity, CancellationToken ct) : Task
+        +DeleteAsync(T entity, CancellationToken ct) : Task
+        +ListAsync(ISpecification<T> spec, CancellationToken ct) : Task<IReadOnlyList<T>>
+        +FirstOrDefaultAsync(ISpecification<T> spec, CancellationToken ct) : Task<T?>
+        +AnyAsync(ISpecification<T> spec, CancellationToken ct) : Task<bool>
+    }
+
+    class EfRepository<T> {
+        -AppDbContext _context
+        +ListAsync(ISpecification<T> spec, CancellationToken ct) : Task<IReadOnlyList<T>>
+        +FirstOrDefaultAsync(ISpecification<T> spec, CancellationToken ct) : Task<T?>
+        +AnyAsync(ISpecification<T> spec, CancellationToken ct) : Task<bool>
+        -ApplySpecification(ISpecification<T>? spec) : IQueryable<T>
+    }
+}
+
+' === HANDLERS QUE USAN ESPECIFICACIONES ===
+package "Application Handlers" {
+    class CreateReceiptHandler {
+        -IRepository<Receipt> _receiptRepo
+        -IRepository<User> _userRepo
+        +HandleAsync(CreateReceiptCommand cmd, CancellationToken ct) : Task<Guid>
+        -GetOrCreateUserAsync(CurrentUser currentUser, CancellationToken ct) : Task<Guid>
+    }
+
+    class ListReceiptsHandler {
+        -IRepository<Receipt> _receiptRepo
+        -IRepository<User> _userRepo
+        +HandleAsync(CancellationToken ct) : Task<IReadOnlyList<Receipt>>
+    }
+
+    class DeleteReceiptHandler {
+        -IRepository<Receipt> _receiptRepo
+        +HandleAsync(Guid id, CancellationToken ct) : Task
+    }
+}
+
+' Relaciones de herencia
+ReceiptByOwnerSpec --|> Specification
+ReceiptByOwnerServiceAndIdentifierSpec --|> Specification
+UserByExternalIdSpec --|> Specification
+UserByExternalIdSpec ..|> ISingleResultSpecification
+
+' Relaciones de entidades
+Receipt --> ServiceProvider
+Receipt --> ReceiptIdentifier
+Receipt --> User : OwnerUserId
+
+' Relaciones de especificaciones con entidades
+ReceiptByOwnerSpec --> Receipt : filters
+ReceiptByOwnerServiceAndIdentifierSpec --> Receipt : filters
+UserByExternalIdSpec --> User : filters
+
+' Relaciones de repositorio
+EfRepository ..|> IRepository
+IRepository --> Specification : uses
+
+' Relaciones de handlers
+CreateReceiptHandler --> IRepository : uses
+CreateReceiptHandler --> UserByExternalIdSpec : creates
+CreateReceiptHandler --> ReceiptByOwnerServiceAndIdentifierSpec : creates
+
+ListReceiptsHandler --> IRepository : uses
+ListReceiptsHandler --> UserByExternalIdSpec : creates
+ListReceiptsHandler --> ReceiptByOwnerSpec : creates
+
+DeleteReceiptHandler --> IRepository : uses
+
+note right of ReceiptByOwnerSpec
+  **Especificación: Recibos por Propietario**
+  
+  Propósito:
+  • Filtrar recibos de un usuario específico
+  • Ordenar por fecha de creación (más recientes primero)
+  
+  Implementación:
+  Query.Where(r => r.OwnerUserId == ownerId)
+       .OrderByDescending(r => r.CreatedAt);
+  
+  Uso:
+  var spec = new ReceiptByOwnerSpec(userId);
+  var receipts = await _receiptRepo.ListAsync(spec, ct);
+end note
+
+note right of ReceiptByOwnerServiceAndIdentifierSpec
+  **Especificación: Detectar Duplicados**
+  
+  Propósito:
+  • Verificar si ya existe un recibo con mismo:
+    - Propietario (OwnerUserId)
+    - Servicio (Service)
+    - Identificador (Identifier.Value)
+  
+  Implementación:
+  Query.Where(x => x.OwnerUserId == userId && 
+                   x.Identifier.Value == identifier && 
+                   x.Service == service);
+  
+  Uso:
+  var dupSpec = new ReceiptByOwnerServiceAndIdentifierSpec(
+      userId, ServiceProvider.Ebsa, "EB1234567890");
+  if (await _receiptRepo.AnyAsync(dupSpec, ct))
+      throw new InvalidOperationException("Duplicate receipt");
+end note
+
+note right of UserByExternalIdSpec
+  **Especificación: Usuario por ID Externo**
+  
+  Propósito:
+  • Buscar usuario por ExternalId (del proveedor de auth)
+  • Implementa ISingleResultSpecification (máximo 1 resultado)
+  
+  Implementación:
+  Query.Where(u => u.ExternalId == externalId);
+  
+  Uso:
+  var userSpec = new UserByExternalIdSpec("auth0|123456");
+  var user = await _userRepo.FirstOrDefaultAsync(userSpec, ct);
+end note
+
+note bottom of EfRepository
+  **Repositorio con Especificaciones**
+  
+  Ventajas del Specification Pattern:
+  
+  ✅ **Reutilización**: La misma especificación se usa en múltiples handlers
+  
+  ✅ **Expresividad**: El código se lee como inglés
+     var duplicateSpec = new ReceiptByOwnerServiceAndIdentifierSpec(...)
+  
+  ✅ **Testabilidad**: Cada especificación se puede testear por separado
+  
+  ✅ **Performance**: Se traduce a SQL optimizado por Entity Framework
+  
+  ✅ **Composición**: Se pueden combinar especificaciones (AND, OR, NOT)
+  
+  ✅ **Mantenibilidad**: Reglas de negocio centralizadas en clases específicas
+end note
+
+@enduml

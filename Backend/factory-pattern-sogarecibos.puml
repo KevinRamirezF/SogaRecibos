@@ -1,0 +1,166 @@
+@startuml Factory Pattern - SogaRecibos Implementation
+
+!theme plain
+skinparam classAttributeIconSize 0
+skinparam classFontSize 11
+
+title Factory Pattern en SogaRecibos\nCreación de Validadores y Constructores de URL
+
+' Enum de proveedores
+enum ServiceProvider {
+    Ebsa = 1
+    Vanti = 2
+    Coservicios = 3
+}
+
+' === FACTORY DE VALIDADORES ===
+package "Validator Factory" {
+    interface IReceiptValidatorFactory {
+        +For(ServiceProvider service) : IReceiptValidator
+    }
+
+    class ReceiptValidatorFactory {
+        -IServiceProvider _serviceProvider
+        -Dictionary<ServiceProvider, IReceiptValidator> _validators
+        +ReceiptValidatorFactory(IServiceProvider serviceProvider)
+        +For(ServiceProvider service) : IReceiptValidator
+    }
+
+    interface IReceiptValidator {
+        +ServiceProvider Service
+        +ValidateAsync(string rawIdentifier, CancellationToken ct) : Task<ReceiptValidationResult>
+    }
+
+    class EbsaReceiptValidator {
+        +ServiceProvider Service
+        +ValidateAsync(string, CancellationToken) : Task<ReceiptValidationResult>
+    }
+
+    class VantiReceiptValidator {
+        +ServiceProvider Service
+        +ValidateAsync(string, CancellationToken) : Task<ReceiptValidationResult>
+    }
+
+    class CoserviciosReceiptValidator {
+        +ServiceProvider Service
+        +ValidateAsync(string, CancellationToken) : Task<ReceiptValidationResult>
+    }
+}
+
+' === FACTORY DE URL BUILDERS ===
+package "URL Builder Factory" {
+    interface IRedirectUrlBuilderFactory {
+        +For(ServiceProvider service) : IRedirectUrlBuilder
+    }
+
+    class RedirectUrlBuilderFactory {
+        -Dictionary<ServiceProvider, IRedirectUrlBuilder> _builders
+        +RedirectUrlBuilderFactory()
+        +For(ServiceProvider service) : IRedirectUrlBuilder
+    }
+
+    interface IRedirectUrlBuilder {
+        +ServiceProvider Service
+        +Build(ReceiptIdentifier identifier) : Uri
+    }
+
+    class EbsaUrlBuilder {
+        +ServiceProvider Service
+        +Build(ReceiptIdentifier) : Uri
+    }
+
+    class VantiUrlBuilder {
+        +ServiceProvider Service
+        +Build(ReceiptIdentifier) : Uri
+    }
+
+    class CoserviciosUrlBuilder {
+        +ServiceProvider Service
+        +Build(ReceiptIdentifier) : Uri
+    }
+}
+
+' === CLIENTES QUE USAN LAS FACTORIES ===
+class ReceiptsController {
+    -IReceiptValidatorFactory _validators
+    -IRedirectUrlBuilderFactory _redirectors
+    +Validate(ServiceProvider, string, CancellationToken) : Task<ActionResult<object>>
+    +RedirectToPay(CreateReceiptCommand) : IActionResult
+}
+
+class CreateReceiptHandler {
+    -IReceiptValidatorFactory _validatorFactory
+    +HandleAsync(CreateReceiptCommand, CancellationToken) : Task<Guid>
+}
+
+' Relaciones Factory de Validadores
+ReceiptValidatorFactory ..|> IReceiptValidatorFactory
+ReceiptValidatorFactory --> IReceiptValidator : creates
+ReceiptValidatorFactory --> ServiceProvider : uses
+
+EbsaReceiptValidator ..|> IReceiptValidator
+VantiReceiptValidator ..|> IReceiptValidator
+CoserviciosReceiptValidator ..|> IReceiptValidator
+
+' Relaciones Factory de URL Builders
+RedirectUrlBuilderFactory ..|> IRedirectUrlBuilderFactory
+RedirectUrlBuilderFactory --> IRedirectUrlBuilder : creates
+RedirectUrlBuilderFactory --> ServiceProvider : uses
+
+EbsaUrlBuilder ..|> IRedirectUrlBuilder
+VantiUrlBuilder ..|> IRedirectUrlBuilder
+CoserviciosUrlBuilder ..|> IRedirectUrlBuilder
+
+' Uso por clientes
+ReceiptsController --> IReceiptValidatorFactory : uses
+ReceiptsController --> IRedirectUrlBuilderFactory : uses
+CreateReceiptHandler --> IReceiptValidatorFactory : uses
+
+note right of ReceiptValidatorFactory
+  **Factory de Validadores**
+  
+  Responsabilidades:
+  • Mantiene un diccionario de validadores
+  • Crea/obtiene el validador correcto según ServiceProvider
+  • Maneja la inyección de dependencias
+  
+  Implementación:
+  _validators = new Dictionary<ServiceProvider, IReceiptValidator>
+  {
+      { ServiceProvider.Ebsa, serviceProvider.GetService<EbsaValidator>() },
+      { ServiceProvider.Vanti, serviceProvider.GetService<VantiValidator>() },
+      { ServiceProvider.Coservicios, serviceProvider.GetService<CoserviciosValidator>() }
+  };
+end note
+
+note right of RedirectUrlBuilderFactory
+  **Factory de URL Builders**
+  
+  Responsabilidades:
+  • Mantiene un diccionario de constructores
+  • Retorna el constructor correcto según ServiceProvider
+  • Centraliza la lógica de selección
+  
+  Uso:
+  var builder = _redirectors.For(ServiceProvider.Ebsa);
+  var url = builder.Build(receiptIdentifier);
+end note
+
+note bottom of ReceiptsController
+  **Cliente de las Factories**
+  
+  Ventajas del Factory Pattern:
+  
+  ✅ Simplicidad: Solo pide lo que necesita
+     var validator = _validators.For(service);
+  
+  ✅ No conoce implementaciones concretas
+     No sabe si es EbsaValidator o VantiValidator
+  
+  ✅ Fácil testing: Se puede mockear IReceiptValidatorFactory
+  
+  ✅ Extensibilidad: Agregar nuevo proveedor = 
+     solo agregar línea al diccionario de la factory
+end note
+
+@enduml

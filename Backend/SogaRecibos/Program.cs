@@ -1,35 +1,28 @@
-namespace SogaRecibos
-{
-    public class Program
-    {
-        public static void Main(string[] args)
-        {
-            var builder = WebApplication.CreateBuilder(args);
+﻿using SogaRecibos.Extensions;
+using SogaRecibos.API.Middleware;
 
-            // Add services to the container.
+var builder = WebApplication.CreateBuilder(args);
 
-            builder.Services.AddControllers();
-            // Learn more about configuring Swagger/OpenAPI at https://aka.ms/aspnetcore/swashbuckle
-            builder.Services.AddEndpointsApiExplorer();
-            builder.Services.AddSwaggerGen();
+// --- Add services to the container ---
+builder.Services
+    .AddApplicationServices()
+    .AddInfrastructureServices(builder.Configuration)
+    .AddApiServices(builder.Configuration);
 
-            var app = builder.Build();
+var app = builder.Build();
 
-            // Configure the HTTP request pipeline.
-            if (app.Environment.IsDevelopment())
-            {
-                app.UseSwagger();
-                app.UseSwaggerUI();
-            }
+// --- Configure the HTTP request pipeline ---
+app.UseMiddleware<ExceptionMiddleware>();
 
-            app.UseHttpsRedirection();
+app.UseSwagger();
+app.UseSwaggerUI();
 
-            app.UseAuthorization();
+app.UseHttpsRedirection();
 
+app.UseAuthentication();
+app.UseAuthorization();
 
-            app.MapControllers();
+app.MapControllers();
 
-            app.Run();
-        }
-    }
-}
+app.Run();
+

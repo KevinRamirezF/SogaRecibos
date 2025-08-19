@@ -1,1 +1,2 @@
-\"namespace SogaRecibos.Infrastructure.Options; public class ProvidersOptions { }\" 
+namespace SogaRecibos.Infrastructure.Options; 
+public class ProvidersOptions { }

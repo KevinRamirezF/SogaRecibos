@@ -1,0 +1,78 @@
+@startuml Specification Pattern - Ejemplo Básico
+
+!theme plain
+skinparam classAttributeIconSize 0
+
+' Entidad sobre la que aplicamos especificaciones
+class Product {
+    +int Id
+    +string Name
+    +decimal Price
+    +string Category
+    +bool IsInStock
+    +DateTime CreatedDate
+}
+
+' Interfaz base de especificación
+interface ISpecification<T> {
+    +bool IsSatisfiedBy(T entity) : bool
+    +Expression<Func<T, bool>> ToExpression() : Expression
+}
+
+' Especificaciones concretas
+class ProductInStockSpec {
+    +bool IsSatisfiedBy(Product product) : bool
+    +Expression<Func<Product, bool>> ToExpression() : Expression
+}
+
+class ProductByCategorySpec {
+    -string _category
+    +ProductByCategorySpec(string category)
+    +bool IsSatisfiedBy(Product product) : bool
+    +Expression<Func<Product, bool>> ToExpression() : Expression
+}
+
+class ProductByPriceRangeSpec {
+    -decimal _minPrice
+    -decimal _maxPrice
+    +ProductByPriceRangeSpec(decimal min, decimal max)
+    +bool IsSatisfiedBy(Product product) : bool
+    +Expression<Func<Product, bool>> ToExpression() : Expression
+}
+
+class RecentProductsSpec {
+    -int _days
+    +RecentProductsSpec(int days)
+    +bool IsSatisfiedBy(Product product) : bool
+    +Expression<Func<Product, bool>> ToExpression() : Expression
+}
+
+' Repositorio que usa especificaciones
+class ProductRepository {
+    +List<Product> FindBySpec(ISpecification<Product> spec) : List<Product>
+    +Product FindFirstBySpec(ISpecification<Product> spec) : Product
+    +bool AnyBySpec(ISpecification<Product> spec) : bool
+}
+
+' Relaciones
+ProductInStockSpec ..|> ISpecification
+ProductByCategorySpec ..|> ISpecification
+ProductByPriceRangeSpec ..|> ISpecification
+RecentProductsSpec ..|> ISpecification
+
+ProductRepository --> ISpecification : uses
+ProductRepository --> Product : manages
+
+note right of ISpecification
+  Cada especificación encapsula
+  una regla de negocio específica
+  que se puede reutilizar
+end note
+
+note bottom of ProductRepository
+  El repositorio puede usar
+  cualquier especificación
+  para filtrar productos
+end note
+
+@enduml

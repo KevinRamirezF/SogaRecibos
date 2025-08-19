@@ -1,0 +1,66 @@
+@startuml Factory Pattern - Ejemplo Básico
+
+!theme plain
+skinparam classAttributeIconSize 0
+
+' Productos que la fábrica puede crear
+interface IVehicle {
+    +Start() : void
+    +Stop() : void
+}
+
+class Car {
+    +Start() : void
+    +Stop() : void
+}
+
+class Motorcycle {
+    +Start() : void
+    +Stop() : void
+}
+
+class Truck {
+    +Start() : void
+    +Stop() : void
+}
+
+' Enum para tipos de vehículos
+enum VehicleType {
+    Car
+    Motorcycle
+    Truck
+}
+
+' Fábrica que crea los vehículos
+class VehicleFactory {
+    +{static} CreateVehicle(VehicleType type) : IVehicle
+}
+
+' Cliente que usa la fábrica
+class Client {
+    +OrderVehicle(VehicleType type) : void
+}
+
+' Relaciones
+Car ..|> IVehicle
+Motorcycle ..|> IVehicle
+Truck ..|> IVehicle
+
+VehicleFactory --> IVehicle : creates
+VehicleFactory --> VehicleType : uses
+Client --> VehicleFactory : uses
+Client --> VehicleType : uses
+
+note right of VehicleFactory
+  La fábrica decide qué
+  clase concreta crear
+  basándose en el tipo
+end note
+
+note bottom of Client
+  El cliente no necesita
+  saber cómo crear cada
+  tipo de vehículo
+end note
+
+@enduml

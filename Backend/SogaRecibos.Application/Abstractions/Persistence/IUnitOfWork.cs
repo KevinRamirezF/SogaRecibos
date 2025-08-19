@@ -1,1 +1,6 @@
-\"namespace SogaRecibos.Application.Abstractions.Persistence; public interface IUnitOfWork { }\" 
+namespace SogaRecibos.Application.Abstractions.Persistence;
+
+public interface IUnitOfWork
+{
+    Task<int> SaveChangesAsync(CancellationToken ct = default);
+}

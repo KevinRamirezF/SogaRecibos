@@ -1,0 +1,136 @@
+@startuml Strategy Pattern - SogaRecibos Implementation
+
+!theme plain
+skinparam classAttributeIconSize 0
+skinparam classFontSize 11
+
+title Strategy Pattern en SogaRecibos\nValidadores y Constructores de URL por Proveedor
+
+' Enum de proveedores
+enum ServiceProvider {
+    Ebsa = 1
+    Vanti = 2
+    Coservicios = 3
+}
+
+' === ESTRATEGIA DE VALIDACIÓN ===
+package "Validation Strategy" {
+    interface IReceiptValidator {
+        +ServiceProvider Service
+        +ValidateAsync(string rawIdentifier, CancellationToken ct) : Task<ReceiptValidationResult>
+    }
+
+    class ReceiptValidationResult {
+        +bool IsValid
+        +string Reason
+        +ReceiptValidationResult(bool isValid, string reason)
+    }
+
+    class EbsaReceiptValidator {
+        +ServiceProvider Service
+        +ValidateAsync(string rawIdentifier, CancellationToken ct) : Task<ReceiptValidationResult>
+    }
+
+    class VantiReceiptValidator {
+        +ServiceProvider Service
+        +ValidateAsync(string rawIdentifier, CancellationToken ct) : Task<ReceiptValidationResult>
+    }
+
+    class CoserviciosReceiptValidator {
+        +ServiceProvider Service
+        +ValidateAsync(string rawIdentifier, CancellationToken ct) : Task<ReceiptValidationResult>
+    }
+}
+
+' === ESTRATEGIA DE CONSTRUCCIÓN DE URL ===
+package "URL Builder Strategy" {
+    interface IRedirectUrlBuilder {
+        +ServiceProvider Service
+        +Build(ReceiptIdentifier identifier) : Uri
+    }
+
+    class EbsaUrlBuilder {
+        +ServiceProvider Service
+        +Build(ReceiptIdentifier identifier) : Uri
+    }
+
+    class VantiUrlBuilder {
+        +ServiceProvider Service
+        +Build(ReceiptIdentifier identifier) : Uri
+    }
+
+    class CoserviciosUrlBuilder {
+        +ServiceProvider Service
+        +Build(ReceiptIdentifier identifier) : Uri
+    }
+}
+
+' === CONTEXTO QUE USA LAS ESTRATEGIAS ===
+class ReceiptsController {
+    -IReceiptValidatorFactory _validators
+    -IRedirectUrlBuilderFactory _redirectors
+    +Validate(ServiceProvider service, string identifier, CancellationToken ct) : Task<ActionResult<object>>
+    +RedirectToPay(CreateReceiptCommand body) : IActionResult
+}
+
+class CreateReceiptHandler {
+    -IReceiptValidatorFactory _validatorFactory
+    +HandleAsync(CreateReceiptCommand cmd, CancellationToken ct) : Task<Guid>
+}
+
+' Relaciones de Validación
+EbsaReceiptValidator ..|> IReceiptValidator
+VantiReceiptValidator ..|> IReceiptValidator
+CoserviciosReceiptValidator ..|> IReceiptValidator
+
+IReceiptValidator --> ReceiptValidationResult : returns
+IReceiptValidator --> ServiceProvider : uses
+
+' Relaciones de URL Builder
+EbsaUrlBuilder ..|> IRedirectUrlBuilder
+VantiUrlBuilder ..|> IRedirectUrlBuilder
+CoserviciosUrlBuilder ..|> IRedirectUrlBuilder
+
+IRedirectUrlBuilder --> ServiceProvider : uses
+
+' Uso en contextos
+ReceiptsController --> IReceiptValidator : uses via factory
+ReceiptsController --> IRedirectUrlBuilder : uses via factory
+CreateReceiptHandler --> IReceiptValidator : uses via factory
+
+note right of IReceiptValidator
+  **Estrategia de Validación**
+  
+  Cada proveedor tiene reglas
+  diferentes para validar
+  identificadores de recibos:
+  
+  • Ebsa: 10 chars, inicia con "EB"
+  • Vanti: 12 dígitos numéricos
+  • Coservicios: 8 chars, termina "CS"
+end note
+
+note right of IRedirectUrlBuilder
+  **Estrategia de URL**
+  
+  Cada proveedor tiene URLs
+  diferentes para pagar:
+  
+  • Ebsa: https://ebsa.com.co/pay?id=
+  • Vanti: https://vanti.co/payment/
+  • Coservicios: https://coservicios.com/pago/
+end note
+
+note bottom of ReceiptsController
+  **Contexto Principal**
+  
+  El controller no sabe qué estrategia
+  específica usar. Solo pide la estrategia
+  correcta a las factories y las ejecuta.
+  
+  Ejemplo:
+  var validator = _validators.For(ServiceProvider.Ebsa);
+  var result = await validator.ValidateAsync(identifier, ct);
+end note
+
+@enduml
