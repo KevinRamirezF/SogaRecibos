@@ -1,0 +1,55 @@
+@startuml Strategy Pattern - Ejemplo Básico
+
+!theme plain
+skinparam classAttributeIconSize 0
+
+' Contexto que usa las estrategias
+class ShoppingCart {
+    -IDiscountStrategy _strategy
+    -decimal _totalAmount
+    +SetDiscountStrategy(IDiscountStrategy) : void
+    +CalculateTotal() : decimal
+}
+
+' Interfaz de la estrategia
+interface IDiscountStrategy {
+    +ApplyDiscount(decimal amount) : decimal
+}
+
+' Estrategias concretas
+class NoDiscountStrategy {
+    +ApplyDiscount(decimal amount) : decimal
+}
+
+class StudentDiscountStrategy {
+    +ApplyDiscount(decimal amount) : decimal
+}
+
+class VIPDiscountStrategy {
+    +ApplyDiscount(decimal amount) : decimal
+}
+
+class SeasonalDiscountStrategy {
+    +ApplyDiscount(decimal amount) : decimal
+}
+
+' Relaciones
+ShoppingCart --> IDiscountStrategy
+NoDiscountStrategy ..|> IDiscountStrategy
+StudentDiscountStrategy ..|> IDiscountStrategy
+VIPDiscountStrategy ..|> IDiscountStrategy
+SeasonalDiscountStrategy ..|> IDiscountStrategy
+
+note right of IDiscountStrategy
+  Cada estrategia implementa
+  una forma diferente de
+  calcular descuentos
+end note
+
+note bottom of ShoppingCart
+  El carrito puede cambiar
+  su estrategia de descuento
+  en cualquier momento
+end note
+
+@enduml

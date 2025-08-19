@@ -1,0 +1,260 @@
+@startuml SogaRecibos Class Diagram
+
+!theme plain
+skinparam classAttributeIconSize 0
+skinparam classFontSize 12
+skinparam packageStyle rectangle
+
+package "SogaRecibos.API" {
+    class ReceiptsController {
+        -ICreateReceiptHandler _create
+        -IListReceiptsHandler _list
+        -IDeleteReceiptHandler _delete
+        -IReceiptValidatorFactory _validators
+        -IRedirectUrlBuilderFactory _redirectors
+        -IMapper _mapper
+        +Get() : Task<ActionResult<IReadOnlyList<ReceiptDto>>>
+        +Create(CreateReceiptCommand) : Task<ActionResult<Guid>>
+        +Delete(Guid) : Task<IActionResult>
+        +Validate(ServiceProvider, string) : Task<ActionResult<object>>
+        +RedirectToPay(CreateReceiptCommand) : IActionResult
+    }
+
+    interface ICurrentUserAccessor {
+        +ExternalId() : string
+        +Email() : string
+    }
+
+    class CurrentUserAccesor {
+        +ExternalId() : string
+        +Email() : string
+    }
+}
+
+package "SogaRecibos.Domain" {
+    class Receipt {
+        +Guid Id
+        +Guid OwnerUserId
+        +ServiceProvider Service
+        +ReceiptIdentifier Identifier
+        +string? Alias
+        +DateTime CreatedAt
+        +{static} Create(Guid, ServiceProvider, ReceiptIdentifier, string?) : Receipt
+        +Rename(string?) : void
+    }
+
+    class ReceiptIdentifier <<record>> {
+        +string Value
+        +{static} Create(string?) : ReceiptIdentifier
+        +ToString() : string
+    }
+
+    class User {
+        +Guid Id
+        +string ExternalId
+        +string Email
+        +DateTime CreatedAt
+        +{static} Create(string, string) : User
+    }
+
+    enum ServiceProvider {
+        Ebsa = 1
+        Vanti = 2
+        Coservicios = 3
+    }
+}
+
+package "SogaRecibos.Application" {
+    
+    package "Abstractions" {
+        interface IRepository<T> {
+            +GetByIdAsync(Guid, CancellationToken) : Task<T?>
+            +AddAsync(T, CancellationToken) : Task
+            +DeleteAsync(T, CancellationToken) : Task
+            +ListAsync(ISpecification<T>, CancellationToken) : Task<IReadOnlyList<T>>
+            +FirstOrDefaultAsync(ISpecification<T>, CancellationToken) : Task<T?>
+            +AnyAsync(ISpecification<T>, CancellationToken) : Task<bool>
+        }
+
+        interface IUnitOfWork {
+            +SaveChangesAsync(CancellationToken) : Task<int>
+        }
+
+        interface IUserResolver {
+            +GetCurrentUser() : CurrentUser
+        }
+
+        class CurrentUser <<record>> {
+            +string ExternalId
+            +string Email
+        }
+    }
+
+    package "Commands" {
+        class CreateReceiptCommand {
+            +Guid OwnerUserId
+            +ServiceProvider Service
+            +string Identifier
+            +string? Alias
+        }
+
+        interface ICreateReceiptHandler {
+            +HandleAsync(CreateReceiptCommand, CancellationToken) : Task<Guid>
+        }
+
+        class CreateReceiptHandler {
+            -IRepository<Receipt> _receiptRepo
+            -IRepository<User> _userRepo
+            -IUnitOfWork _uow
+            -IReceiptValidatorFactory _validatorFactory
+            -IUserResolver _userResolver
+            +HandleAsync(CreateReceiptCommand, CancellationToken) : Task<Guid>
+            -GetOrCreateUserAsync(CurrentUser, CancellationToken) : Task<Guid>
+        }
+    }
+
+    package "Queries" {
+        interface IListReceiptsHandler {
+            +HandleAsync(CancellationToken) : Task<IReadOnlyList<Receipt>>
+        }
+
+        class ListReceiptsHandler {
+            +HandleAsync(CancellationToken) : Task<IReadOnlyList<Receipt>>
+        }
+    }
+
+    package "Delete" {
+        interface IDeleteReceiptHandler {
+            +HandleAsync(Guid, CancellationToken) : Task
+        }
+
+        class DeleteReceiptHandler {
+            +HandleAsync(Guid, CancellationToken) : Task
+        }
+    }
+
+    package "DTOs" {
+        class ReceiptDto {
+            +Guid Id
+            +string Service
+            +string Identifier
+            +string? Alias
+            +DateTime CreatedAt
+        }
+    }
+
+    package "Strategies" {
+        interface IReceiptValidator {
+            +ServiceProvider Service
+            +ValidateAsync(string, CancellationToken) : Task<ReceiptValidationResult>
+        }
+
+        interface IRedirectUrlBuilder {
+            +ServiceProvider Service
+            +Build(ReceiptIdentifier) : Uri
+        }
+
+        class ReceiptValidationResult {
+            +bool IsValid
+            +string? Reason
+        }
+    }
+
+    package "Factories" {
+        interface IReceiptValidatorFactory {
+            +For(ServiceProvider) : IReceiptValidator
+        }
+
+        interface IRedirectUrlBuilderFactory {
+            +For(ServiceProvider) : IRedirectUrlBuilder
+        }
+    }
+
+    package "Specifications" {
+        class ReceiptByOwnerSpec {
+            +ReceiptByOwnerSpec(Guid)
+        }
+
+        class ReceiptByOwnerServiceAndIdentifierSpec {
+            +ReceiptByOwnerServiceAndIdentifierSpec(Guid, ServiceProvider, string)
+        }
+
+        class UserByExternalIdSpec {
+            +UserByExternalIdSpec(string)
+        }
+    }
+
+    package "Validation" {
+        class CreateReceiptValidator {
+        }
+    }
+}
+
+package "SogaRecibos.Infrastructure" {
+    class AppDbContext {
+        +DbSet<Receipt> Receipts
+        +DbSet<User> Users
+        +OnModelCreating(ModelBuilder) : void
+    }
+
+    class EfRepository<T> {
+        -AppDbContext _context
+        +GetByIdAsync(Guid, CancellationToken) : Task<T?>
+        +AddAsync(T, CancellationToken) : Task
+        +DeleteAsync(T, CancellationToken) : Task
+        +ListAsync(ISpecification<T>, CancellationToken) : Task<IReadOnlyList<T>>
+        +FirstOrDefaultAsync(ISpecification<T>, CancellationToken) : Task<T?>
+        +AnyAsync(ISpecification<T>, CancellationToken) : Task<bool>
+        -ApplySpecification(ISpecification<T>?) : IQueryable<T>
+    }
+
+    class UserResolver {
+        +GetCurrentUser() : CurrentUser
+    }
+}
+
+' Relationships
+ReceiptsController --> ICreateReceiptHandler
+ReceiptsController --> IListReceiptsHandler
+ReceiptsController --> IDeleteReceiptHandler
+ReceiptsController --> IReceiptValidatorFactory
+ReceiptsController --> IRedirectUrlBuilderFactory
+
+CreateReceiptHandler ..|> ICreateReceiptHandler
+CreateReceiptHandler --> IRepository
+CreateReceiptHandler --> IUnitOfWork
+CreateReceiptHandler --> IReceiptValidatorFactory
+CreateReceiptHandler --> IUserResolver
+
+ListReceiptsHandler ..|> IListReceiptsHandler
+DeleteReceiptHandler ..|> IDeleteReceiptHandler
+
+EfRepository ..|> IRepository
+UserResolver ..|> IUserResolver
+CurrentUserAccesor ..|> ICurrentUserAccessor
+
+Receipt --> ServiceProvider
+Receipt --> ReceiptIdentifier
+Receipt --> User : OwnerUserId
+
+CreateReceiptCommand --> ServiceProvider
+
+IReceiptValidator --> ServiceProvider
+IReceiptValidator --> ReceiptValidationResult
+IRedirectUrlBuilder --> ServiceProvider
+IRedirectUrlBuilder --> ReceiptIdentifier
+
+IReceiptValidatorFactory --> IReceiptValidator
+IRedirectUrlBuilderFactory --> IRedirectUrlBuilder
+
+ReceiptByOwnerSpec --> Receipt
+ReceiptByOwnerServiceAndIdentifierSpec --> Receipt
+UserByExternalIdSpec --> User
+
+AppDbContext --> Receipt
+AppDbContext --> User
+EfRepository --> AppDbContext
+
+IUserResolver --> CurrentUser
+
+@enduml
