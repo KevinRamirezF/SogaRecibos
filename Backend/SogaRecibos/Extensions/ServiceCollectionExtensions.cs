@@ -70,7 +70,7 @@ public static class ServiceCollectionExtensions
 
     public static IServiceCollection AddApiServices(this IServiceCollection services, IConfiguration config)
     {
-        services.AddScoped<API.Auth.ICurrentUserAccessor, API.Auth.CurrentUserAccessor>();
+        services.AddScoped<SogaRecibos.Application.Abstractions.Auth.ICurrentUserAccessor, SogaRecibos.Infrastructure.Auth.CurrentUserAccessor>();
 
         services.AddHttpContextAccessor();
 

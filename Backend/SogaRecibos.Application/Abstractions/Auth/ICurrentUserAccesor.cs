@@ -1,4 +1,4 @@
-﻿namespace SogaRecibos.API.Auth
+﻿namespace SogaRecibos.Application.Abstractions.Auth
 {
     public interface ICurrentUserAccessor
     {
